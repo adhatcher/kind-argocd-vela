@@ -1,0 +1,6 @@
+resources:
+  - app-00-gateway-api-crds.yaml
+  - app-10-envoy-gateway.yaml
+  - app-30-edge.yaml
+  - app-40-kubevela.yaml
+  - app-50-kubevela-addons.yaml

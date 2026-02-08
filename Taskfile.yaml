@@ -31,7 +31,7 @@ tasks:
       - deploy-argocd
       - get-argocd-password
       - deploy-app-of-apps
-
+      
 
   check-dependencies:
     silent: true
