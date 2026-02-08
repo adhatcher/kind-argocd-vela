@@ -264,8 +264,9 @@ openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
 **Generate base64:**
 
 ```bash
-CRT_B64=$(base64 -w0 certs/zeus.crt)
-KEY_B64=$(base64 -w0 certs/zeus.key)
+CRT_B64=$(base64 < certs/zeus.crt | tr -d '\n')
+KEY_B64=$(base64 < certs/zeus.key | tr -d '\n')
+
 echo $CRT_B64 | head -c 60; echo
 echo $KEY_B64 | head -c 60; echo
 ```
