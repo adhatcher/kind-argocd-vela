@@ -196,7 +196,7 @@ spec:
         valuesObject: {}
 
     # 2) EnvoyProxy config (NodePort pinning)
-    - repoURL: https://github.com/adhatcher/kind-argo-vela.git
+    - repoURL: https://github.com/adhatcher/kind-argocd-vela.git
       targetRevision: main
       path: gitops/clusters/zeus/infra/10-envoy-gateway
 
@@ -315,7 +315,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/adhatcher/kind-argo-vela.git
+    repoURL: https://github.com/adhatcher/kind-argocd-vela.git
     targetRevision: main
     path: gitops/clusters/zeus/infra/30-edge
   destination:
@@ -459,7 +459,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/adhatcher/kind-argo-vela.git
+    repoURL: https://github.com/adhatcher/kind-argocd-vela.git
     targetRevision: main
     path: gitops/clusters/zeus/infra/50-kubevela-addons
   destination:
