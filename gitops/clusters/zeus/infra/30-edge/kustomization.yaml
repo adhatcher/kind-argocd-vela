@@ -1,0 +1,5 @@
+resources:
+  - tls-secret.yaml
+  - gateway.yaml
+  - httproute-argocd.yaml
+  - httproute-velaux.yaml

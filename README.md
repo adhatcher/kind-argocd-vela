@@ -307,5 +307,81 @@ spec:
       selfHeal: true
 ```
 
+`gitops/clusters/zeus/infra/30-edge/kustomization.yaml`
 
+```yaml
+resources:
+  - tls-secret.yaml
+  - gateway.yaml
+  - httproute-argocd.yaml
+  - httproute-velaux.yaml
+```
+
+`gitops/clusters/zeus/infra/30-edge/gateway.yaml`
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: zeus-gw
+  namespace: envoy-gateway-system
+spec:
+  gatewayClassName: envoy-gateway
+  listeners:
+  - name: https
+    protocol: HTTPS
+    port: 443
+    hostname: "*.zeus"
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: zeus-wildcard-tls
+```
+
+**Route Argo CD:**
+
+`gitops/clusters/zeus/infra/30-edge/httproute-argocd.yaml`
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  parentRefs:
+  - name: zeus-gw
+    namespace: envoy-gateway-system
+    sectionName: https
+  hostnames:
+  - argocd.zeus
+  rules:
+  - backendRefs:
+    - name: argocd-server
+      port: 80
+```
+
+**Route VelaUX (service name typically velaux, created by addon):**
+
+`gitops/clusters/zeus/infra/30-edge/httproute-velaux.yaml`
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: velaux
+  namespace: vela-system
+spec:
+  parentRefs:
+  - name: zeus-gw
+    namespace: envoy-gateway-system
+    sectionName: https
+  hostnames:
+  - vela.zeus
+  rules:
+  - backendRefs:
+    - name: velaux
+      port: 80
+```
 
