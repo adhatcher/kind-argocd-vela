@@ -385,3 +385,85 @@ spec:
       port: 80
 ```
 
+## 6 KubeVela core (wave 40) + addons (wave 50)
+
+### 6a. KubeVela core install (Helm via Argo)
+
+`gitops/clusters/zeus/infra/app-40-kubevela.yaml`
+
+```YAML
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kubevela
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "40"
+spec:
+  project: default
+  source:
+    repoURL: https://charts.kubevela.net/core
+    chart: vela-core
+    targetRevision: 1.10.6
+    helm:
+      values: |
+        # defaults are fine for dev unless you need overrides
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vela-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+```
+
+### 6b. Enable addons declaratively (VelaUX + FluxCD) (wave 50)
+
+**Best GitOps pattern is:**
+
+1. Generate addon manifests using vela addon enable ... --dry-run
+1. Commit the output YAML into 50-kubevela-addons/
+
+`gitops/clusters/zeus/infra/app-50-kubevela-addons.yaml`
+
+```YAML
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kubevela-addons
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/adhatcher/kind-argo-vela.git
+    targetRevision: main
+    path: gitops/clusters/zeus/infra/50-kubevela-addons
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vela-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
+`gitops/clusters/zeus/infra/50-kubevela-addons/kustomization.yaml`
+
+```YAML
+resources:
+  - velaux.yaml
+  - fluxcd.yaml
+```
+
+Now generate those two files (run after KubeVela core is installed once, or in a CI job that has vela):
+
+```bash
+vela addon enable velaux --dry-run > gitops/clusters/zeus/infra/50-kubevela-addons/velaux.yaml
+vela addon enable fluxcd --dry-run > gitops/clusters/zeus/infra/50-kubevela-addons/fluxcd.yaml
+```
+
+**Commit/push.**
