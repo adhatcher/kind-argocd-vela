@@ -6,9 +6,9 @@ vars:
   CLUSTER_NAME: zeus
   GATEWAY_NS: gateway
   DEPENDENCIES:
-    - docker
+    # - docker
     - kind
-    - cloud-provider-kind
+    # - cloud-provider-kind
     - kubectl
     - helm
 
@@ -18,15 +18,15 @@ vars:
   check-cluster-running: &check-cluster-running |
     kind get clusters | grep {{.CLUSTER_NAME}}
 
-  check-cloud-provider-kind-running: &check-cloud-provider-kind-running |
-    ps -ef |grep cloud-provider-kind | grep -v grep
+  # check-cloud-provider-kind-running: &check-cloud-provider-kind-running |
+  #   ps -ef |grep cloud-provider-kind | grep -v grep
 
 tasks:
 
   default:
     aliases: [deploy, all, make]
     deps:
-      - check-dependencies
+      #- check-dependencies
       - create-cluster
       - deploy-argocd
       - get-argocd-password
@@ -45,10 +45,10 @@ tasks:
 
   create-cluster:
     run: once
-    preconditions:
-      - *check-docker-running
+    # preconditions:
+    #   - *check-docker-running
     cmds:
-      - kind create cluster --config=clusters/zeus/kind-config.yaml --name {{.CLUSTER_NAME}}
+      - kind create cluster --config=gitops/clusters/zeus/kind-config.yaml --name {{.CLUSTER_NAME}}
     status:
       - *check-cluster-running
 
@@ -72,7 +72,7 @@ tasks:
           --namespace argocd \
           --create-namespace \
           --set server.insecure=true \
-          --set server.ingress.enabled=false \
+          --set server.ingress.enabled=false 
           # --set server.httproute.enabled=true \
           # --set server.httproute.hostnames[0]=argocd.zeus \
           # --set server.httproute.parentRefs[0].name=gateway \
