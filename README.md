@@ -59,7 +59,6 @@ gitops/
 
       10-envoy-gateway/
         kustomization.yaml
-        helm-values.yaml
         envoyproxy-nodeports.yaml
 
       20-argocd/
@@ -185,31 +184,40 @@ metadata:
     argocd.argoproj.io/sync-wave: "10"
 spec:
   project: default
-  source:
-    repoURL: https://github.com/YOURORG/YOURREPO.git
-    targetRevision: main
-    path: gitops/clusters/zeus/infra/10-envoy-gateway
+
+  # Multiple sources: Helm chart + Git manifests
+  sources:
+    # 1) Envoy Gateway Helm chart
+    - chart: gateway-helm
+      repoURL: docker.io/envoyproxy
+      targetRevision: v1.6.3
+      helm:
+        # Keep defaults unless you need advanced config
+        valuesObject: {}
+
+    # 2) EnvoyProxy config (NodePort pinning)
+    - repoURL: https://github.com/adhatcher/kind-argo-vela.git
+      targetRevision: main
+      path: gitops/clusters/zeus/infra/10-envoy-gateway
+
   destination:
     server: https://kubernetes.default.svc
     namespace: envoy-gateway-system
+
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true
 ```
-
-Now define 10-envoy-gateway using Helm via Argo (recommended), but since you’re using plain manifests here, simplest is: commit Envoy Gateway install manifests. If you prefer Helm-in-Argo, tell me what chart/version you want pinned and I’ll give that exact spec.source block.
-
-For a pure-manifest approach, you can still include the EnvoyProxy with NodePorts:
 
 `gitops/clusters/zeus/infra/10-envoy-gateway/kustomization.yaml`
 
 ```yaml
 resources:
   - envoyproxy-nodeports.yaml
-  # plus envoy gateway install manifests (vendor/pinned)
 ```
 
 `gitops/clusters/zeus/infra/10-envoy-gateway/envoyproxy-nodeports.yaml`
@@ -234,7 +242,7 @@ spec:
             nodePort: 30443
 ```
 
-This is what makes host ports 80/443 forward into the Envoy dataplane consistently
+This is what makes host ports 80/443 forward into the Envoy dataplane consistently.
 
 ## 5 Self-signed cert + Gateway + HTTPRoutes (wave 30, GitOps-managed)
 
