@@ -1,0 +1,3 @@
+resources:
+  - envoyproxy-nodeports.yaml
+  # plus envoy gateway install manifests (vendor/pinned)
