@@ -11,7 +11,7 @@
 1. Self-signed TLS terminated at the Gateway
 1. Everything (Gateway + Routes + KubeVela + addons) under Argo GitOps, with explicit sync ordering
 
-## Kind config (expose 80/443 _+ kubeapi 6334)
+## Kind config (expose 80/443 + kubeapi 6334)
 
 This makes the kubernetes api reacable remotely on :6334, and forwards host :80/:443 to fixed NodePorts for Envoy.
 
