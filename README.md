@@ -287,6 +287,17 @@ data:
   tls.key: <PASTE_KEY_B64>
 ```
 
+Or use this instead:
+
+```bash
+kubectl create secret tls zeus-wildcard-tls \
+  --cert=certs/zeus.crt \
+  --key=certs/zeus.key \
+  -n envoy-gateway-system \
+  --dry-run=client -o yaml > gitops/clusters/zeus/infra/30-edge/tls-secret.yaml
+  ```
+
+  
 This is the simple GitOps path. If you’d rather not store private keys in git, the next step would be SOPS/age or SealedSecrets—say so and I’ll switch the plan.
 
 ### 5c. Gateway + Routes

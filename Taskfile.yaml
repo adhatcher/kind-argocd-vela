@@ -104,6 +104,19 @@ tasks:
     cmds:
       - kubectl apply -f gitops/clusters/zeus/bootstrap/app-of-apps.yaml
     
+
+  create-certs:
+    desc: create the certs needed for envoy
+    deps:
+      - deploy-envoy
+    cmds:
+      - |
+        kubectl create secret tls zeus-wildcard-tls \
+          --cert=certs/zeus.crt \
+          --key=certs/zeus.key \
+          -n envoy-gateway-system \
+          --dry-run=client -o yaml > gitops/clusters/zeus/infra/30-edge/tls-secret.yaml
+          
   clean:
     aliases: [delete]
     deps:
