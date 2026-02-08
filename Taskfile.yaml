@@ -1,0 +1,111 @@
+# Taskfile.yaml
+
+version: '3'
+
+vars:
+  CLUSTER_NAME: zeus
+  GATEWAY_NS: gateway
+  DEPENDENCIES:
+    - docker
+    - kind
+    - cloud-provider-kind
+    - kubectl
+    - helm
+
+  check-docker-running: &check-docker-running |
+    docker info > /dev/null 2>&1
+
+  check-cluster-running: &check-cluster-running |
+    kind get clusters | grep {{.CLUSTER_NAME}}
+
+  check-cloud-provider-kind-running: &check-cloud-provider-kind-running |
+    ps -ef |grep cloud-provider-kind | grep -v grep
+
+tasks:
+
+  default:
+    aliases: [deploy, all, make]
+    deps:
+      - check-dependencies
+      - create-cluster
+      - deploy-argocd
+      - get-argocd-password
+      - deploy-app-of-apps
+
+
+  check-dependencies:
+    silent: true
+    cmds:
+      - |
+        {{range .DEPENDENCIES}}
+          if ! command -v {{.}} > /dev/null; then
+            echo "{{.}} not found"
+          fi
+        {{end}}
+
+  create-cluster:
+    run: once
+    preconditions:
+      - *check-docker-running
+    cmds:
+      - kind create cluster --config=clusters/zeus/kind-config.yaml --name {{.CLUSTER_NAME}}
+    status:
+      - *check-cluster-running
+
+  clean-cluster:
+    cmds:
+      - kind delete cluster --name {{.CLUSTER_NAME}}
+
+  deploy-argocd:
+    desc: Installs Argocd via helm and sets the configs.params.server.insecure=true 
+    run: once
+    preconditions:
+      - *check-cluster-running
+    deps:
+      - create-cluster
+    cmds:
+      #- kubectl create ns argocd
+      - helm repo add argo https://argoproj.github.io/argo-helm
+      - helm repo update
+      - |
+        helm upgrade --install argocd argo/argo-cd \
+          --namespace argocd \
+          --create-namespace \
+          --set server.insecure=true \
+          --set server.ingress.enabled=false \
+          # --set server.httproute.enabled=true \
+          # --set server.httproute.hostnames[0]=argocd.zeus \
+          # --set server.httproute.parentRefs[0].name=gateway \
+          # --set server.httproute.parentRefs[0].namespace=gateway
+    status:
+      - kubectl wait deployment argocd-server --for=condition=available --timeout=60s -n argocd
+  
+  clean-argoCD:
+    cmds:
+      - kubectl delete ns argocd
+
+  get-argocd-password:
+    desc: get argocd password
+    run: once
+    deps:
+      - deploy-argocd
+    preconditions:
+      -  kubectl wait deployment argocd-server --for=condition=available --timeout=60s -n argocd
+    cmds:
+      - kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode
+    status:
+      - kubectl wait deployment argocd-server --for=condition=available --timeout=60s -n argocd
+
+
+  deploy-app-of-apps:
+    desc: applies the app of apps in argocd
+    deps:
+      - deploy-argocd
+    cmds:
+      - kubectl apply -f gitops/clusters/zeus/bootstrap/app-of-apps.yaml
+    
+  clean:
+    aliases: [delete]
+    deps:
+      - clean-cluster
+      - clean-lb
