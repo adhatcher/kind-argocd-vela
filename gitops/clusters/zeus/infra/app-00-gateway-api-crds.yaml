@@ -1,17 +1,19 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: zeus-infra
+  name: gateway-api-crds
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   project: default
   source:
-    repoURL: https://github.com/adhatcher/kind-argocd-vela.git
+    repoURL: https://github.com/adhatcher/kube-argo-vela.git
     targetRevision: main
-    path: gitops/clusters/zeus/infra
+    path: gitops/clusters/zeus/infra/00-gateway-api-crds
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: kube-system
   syncPolicy:
     automated:
       prune: true

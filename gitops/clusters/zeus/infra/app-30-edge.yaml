@@ -1,17 +1,19 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: zeus-infra
+  name: edge
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
 spec:
   project: default
   source:
     repoURL: https://github.com/adhatcher/kind-argocd-vela.git
     targetRevision: main
-    path: gitops/clusters/zeus/infra
+    path: gitops/clusters/zeus/infra/30-edge
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: envoy-gateway-system
   syncPolicy:
     automated:
       prune: true

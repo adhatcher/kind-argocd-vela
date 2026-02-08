@@ -1,0 +1,3 @@
+resources:
+  - velaux.yaml
+  - fluxcd.yaml

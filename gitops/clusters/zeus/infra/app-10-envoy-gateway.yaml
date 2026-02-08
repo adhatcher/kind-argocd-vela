@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: envoy-gateway
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  project: default
+
+  # Multiple sources: Helm chart + Git manifests
+  sources:
+    # 1) Envoy Gateway Helm chart
+    - chart: gateway-helm
+      repoURL: docker.io/envoyproxy
+      targetRevision: v1.6.3
+      helm:
+        # Keep defaults unless you need advanced config
+        valuesObject: {}
+
+    # 2) EnvoyProxy config (NodePort pinning)
+    - repoURL: https://github.com/adhatcher/kind-argocd-vela.git
+      targetRevision: main
+      path: gitops/clusters/zeus/infra/10-envoy-gateway
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: envoy-gateway-system
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
