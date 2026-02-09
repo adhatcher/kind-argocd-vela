@@ -10,10 +10,10 @@ spec:
   source:
     repoURL: https://github.com/adhatcher/kind-argocd-vela.git
     targetRevision: main
-    path: gitops/clusters/zeus/infra/60-kubevela-addon-gateway
+    path: gitops/clusters/zeus/infra/60-kubevela-gateway
   destination:
     server: https://kubernetes.default.svc
-    namespace: envoy-gateway-system
+    namespace: vela-system
   syncPolicy:
     automated:
       prune: true
