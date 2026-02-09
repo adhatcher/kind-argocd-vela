@@ -4,3 +4,4 @@ resources:
   - app-30-edge.yaml
   - app-40-kubevela.yaml
   - app-50-kubevela-addons.yaml
+  - app-60-kubevela-gateway.yaml
