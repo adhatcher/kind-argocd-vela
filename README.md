@@ -352,11 +352,24 @@ spec:
 `gitops/clusters/zeus/infra/30-edge/kustomization.yaml`
 
 ```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: envoy-gateway-system
+
 resources:
-  - tls-secret.yaml
   - gateway.yaml
   - httproute-argocd.yaml
   - httproute-velaux.yaml
+
+secretGenerator:
+  - name: zeus-wildcard-tls
+    type: kubernetes.io/tls
+    files:
+      - tls.crt=../../../../../certs/zeus.crt
+      - tls.key=../../../../../certs/zeus.key
+
+generatorOptions:
+  disableNameSuffixHash: true
 ```
 
 `gitops/clusters/zeus/infra/30-edge/gateway.yaml`
