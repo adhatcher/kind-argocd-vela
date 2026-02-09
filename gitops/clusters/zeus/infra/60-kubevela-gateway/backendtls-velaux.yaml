@@ -4,9 +4,9 @@ metadata:
   name: velaux-backend-tls
   namespace: vela-system
 spec:
-  targetRef:
-    group: ""
-    kind: Service
-    name: kubevela-cluster-gateway-service
-  tls:
-    sni: vela.zeus
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: kubevela-cluster-gateway-service
+  validation:
+    hostname: vela.zeus
