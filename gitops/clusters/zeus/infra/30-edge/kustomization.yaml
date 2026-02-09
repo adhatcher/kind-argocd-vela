@@ -3,12 +3,11 @@ kind: Kustomization
 namespace: envoy-gateway-system
 
 resources:
-  - tls-secret.yaml
   - gateway.yaml
   - httproute-argocd.yaml
   - httproute-velaux.yaml
 
-  secretGenerator:
+secretGenerator:
   - name: zeus-wildcard-tls
     type: kubernetes.io/tls
     files:
