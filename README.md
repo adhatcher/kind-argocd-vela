@@ -60,6 +60,7 @@ gitops/
       10-envoy-gateway/
         kustomization.yaml
         envoyproxy-nodeports.yaml
+        gatewayclass.yaml
 
       20-argocd/
         kustomization.yaml
@@ -218,6 +219,7 @@ spec:
 ```yaml
 resources:
   - envoyproxy-nodeports.yaml
+  - gatewayclass.yaml
 ```
 
 `gitops/clusters/zeus/infra/10-envoy-gateway/envoyproxy-nodeports.yaml`
@@ -240,6 +242,26 @@ spec:
             nodePort: 30080
           - port: 443
             nodePort: 30443
+```
+
+### 4c. Create a GatewayClass (and link it to your EnvoyProxy NodePort pinning)
+
+**Add this file:**
+
+`gitops/clusters/zeus/infra/10-envoy-gateway/gatewayclass.yaml`
+
+```YAML
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: envoy-gateway
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: zeus-proxy
+    namespace: envoy-gateway-system
 ```
 
 This is what makes host ports 80/443 forward into the Envoy dataplane consistently.
