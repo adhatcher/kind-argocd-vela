@@ -57,7 +57,7 @@ tasks:
       - kind delete cluster --name {{.CLUSTER_NAME}}
 
   deploy-argocd:
-    desc: Installs Argocd via helm and sets the configs.params.server.insecure=true 
+    desc: Installs Argocd via helm and sets argocd-cm url + server insecure
     run: once
     preconditions:
       - *check-cluster-running
@@ -72,11 +72,10 @@ tasks:
           --namespace argocd \
           --create-namespace \
           --set server.insecure=true \
+          --set configs.cm.url=https://argocd.zeus \
+          --set configs.cm.server\\.insecure=true \
           --set server.ingress.enabled=false 
-          # --set server.httproute.enabled=true \
-          # --set server.httproute.hostnames[0]=argocd.zeus \
-          # --set server.httproute.parentRefs[0].name=gateway \
-          # --set server.httproute.parentRefs[0].namespace=gateway
+
     status:
       - kubectl wait deployment argocd-server --for=condition=available --timeout=60s -n argocd
   
