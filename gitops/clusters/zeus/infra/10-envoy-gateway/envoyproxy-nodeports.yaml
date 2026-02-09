@@ -9,9 +9,3 @@ spec:
     kubernetes:
       envoyService:
         type: NodePort
-        nodePort:
-          ports:
-          - port: 80
-            nodePort: 30080
-          - port: 443
-            nodePort: 30443
