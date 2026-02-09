@@ -8,7 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://charts.kubevela.net/core
+    repoURL: https://kubevela.github.io/charts/
     chart: vela-core
     targetRevision: 1.10.6
     helm:
