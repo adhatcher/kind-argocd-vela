@@ -4,3 +4,4 @@ namespace: vela-system
 
 resources:
   - httproute-velaux.yaml
+  - backendtls-velaux.yaml
