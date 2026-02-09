@@ -11,8 +11,8 @@ secretGenerator:
   - name: zeus-wildcard-tls
     type: kubernetes.io/tls
     files:
-      - tls.crt=../../../../../certs/zeus.crt
-      - tls.key=../../../../../certs/zeus.key
+      - tls.crt=certs/zeus.crt
+      - tls.key=certs/zeus.key
 
 generatorOptions:
   disableNameSuffixHash: true
