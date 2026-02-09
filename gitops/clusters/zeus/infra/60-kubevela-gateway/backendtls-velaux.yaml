@@ -10,3 +10,4 @@ spec:
       name: kubevela-cluster-gateway-service
   validation:
     hostname: vela.zeus
+    wellKnownCACertificates: System
