@@ -10,4 +10,7 @@ spec:
       name: kubevela-cluster-gateway-service
   validation:
     hostname: vela.zeus
-    wellKnownCACertificates: System
+    caCertificateRefs:
+      - group: ""
+        kind: Secret
+        name: velaux-backend-ca
