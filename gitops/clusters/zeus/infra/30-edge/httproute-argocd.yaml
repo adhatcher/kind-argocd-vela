@@ -4,13 +4,13 @@ metadata:
   name: argocd
   namespace: argocd
 spec:
-  parentRefs:
-  - name: zeus-gw
-    namespace: envoy-gateway-system
-    sectionName: https
   hostnames:
-  - argocd.zeus
+    - argocd.zeus
+  parentRefs:
+    - name: zeus-gw
+      namespace: envoy-gateway-system
+      sectionName: https
   rules:
-  - backendRefs:
-    - name: argocd-server
-      port: 80
+    - backendRefs:
+        - name: argocd-server
+          port: 80
