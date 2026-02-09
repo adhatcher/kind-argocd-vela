@@ -9,7 +9,7 @@ spec:
       kind: Service
       name: kubevela-cluster-gateway-service
   validation:
-    hostname: vela.zeus
+    hostname: kubevela-cluster-gateway-service.vela-system.svc
     caCertificateRefs:
       - group: ""
         kind: Secret
