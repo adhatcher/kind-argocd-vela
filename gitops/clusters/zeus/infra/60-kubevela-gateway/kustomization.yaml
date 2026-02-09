@@ -8,3 +8,4 @@ resources:
   - velaux-backend-ca-secret.yaml
   - velaux-serviceaccount.yaml
   - velaux-clusterrolebinding.yaml
+  - velaux-anon-clusterrolebinding.yaml
