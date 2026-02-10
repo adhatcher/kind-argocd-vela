@@ -5,3 +5,7 @@ resources:
   - app-40-kubevela.yaml
   - app-50-kubevela-addons.yaml
   - app-60-kubevela-gateway.yaml
+  - app-70-metrics-server.yaml
+  - app-71-kube-prometheus-stack.yaml
+  - app-72-opentelemetry-operator.yaml
+  - app-73-observability-gateway.yaml

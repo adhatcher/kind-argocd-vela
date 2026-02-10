@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability-gateway
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "73"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/adhatcher/kind-argocd-vela.git
+    targetRevision: main
+    path: gitops/clusters/zeus/infra/70-observability-gateway
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
