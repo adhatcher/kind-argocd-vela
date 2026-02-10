@@ -1,16 +1,16 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: observability-gateway
+  name: prometheus-operator-crds
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "74"
+    argocd.argoproj.io/sync-wave: "70"
 spec:
   project: observability
   source:
-    repoURL: https://github.com/adhatcher/kind-argocd-vela.git
-    targetRevision: main
-    path: gitops/clusters/zeus/infra/70-observability-gateway
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: prometheus-operator-crds
+    targetRevision: 15.0.1
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
