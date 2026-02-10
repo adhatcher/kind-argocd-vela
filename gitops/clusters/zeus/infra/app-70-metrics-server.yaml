@@ -12,8 +12,10 @@ spec:
     chart: metrics-server
     targetRevision: 3.12.2
     helm:
-      valueFiles:
-        - gitops/clusters/zeus/infra/70-observability/metrics-server-values.yaml
+      values: |
+        args:
+          - --kubelet-insecure-tls
+          - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system

@@ -12,8 +12,18 @@ spec:
     chart: kube-prometheus-stack
     targetRevision: 62.7.0
     helm:
-      valueFiles:
-        - gitops/clusters/zeus/infra/70-observability/kube-prometheus-stack-values.yaml
+      values: |
+        grafana:
+          enabled: true
+          service:
+            port: 8080
+        prometheus:
+          prometheusSpec:
+            retention: 15d
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+        alertmanager:
+          enabled: true
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
