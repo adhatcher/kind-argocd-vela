@@ -12,8 +12,10 @@ spec:
     chart: opentelemetry-operator
     targetRevision: 0.77.0
     helm:
-      valueFiles:
-        - gitops/clusters/zeus/infra/70-observability/opentelemetry-operator-values.yaml
+      values: |
+        admissionWebhooks:
+          certManager:
+            enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: observability
