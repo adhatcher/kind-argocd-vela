@@ -16,6 +16,9 @@ spec:
         admissionWebhooks:
           certManager:
             enabled: false
+        manager:
+          collectorImage:
+            repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector
       skipSchemaValidation: true
   destination:
     server: https://kubernetes.default.svc
