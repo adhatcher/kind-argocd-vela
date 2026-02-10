@@ -4,8 +4,3 @@ namespace: vela-system
 
 resources:
   - httproute-velaux.yaml
-  - backendtls-velaux.yaml
-  - velaux-backend-ca-secret.yaml
-  - velaux-serviceaccount.yaml
-  - velaux-clusterrolebinding.yaml
-  - velaux-anon-clusterrolebinding.yaml

@@ -12,5 +12,5 @@ spec:
   - vela.zeus
   rules:
   - backendRefs:
-    - name: kubevela-cluster-gateway-service
-      port: 9443
+    - name: velaux
+      port: 80
