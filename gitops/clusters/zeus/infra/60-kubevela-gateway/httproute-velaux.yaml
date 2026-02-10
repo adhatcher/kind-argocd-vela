@@ -12,5 +12,5 @@ spec:
   - vela.zeus
   rules:
   - backendRefs:
-    - name: velaux
-      port: 80
+    - name: velaux-server
+      port: 8000
