@@ -73,13 +73,16 @@ tasks:
           --create-namespace \
           --set server.insecure=true \
           --set configs.cm.url=https://argocd.zeus \
-          --set configs.cm.server\\.insecure=true \
-          --set server.ingress.enabled=false 
+          --set configs.params.server\\.insecure=true \
+          --set server.ingress.enabled=false \
+          --set server.service.type=ClusterIP \
+          --set notifications.enabled=false \
+          --set dex.enabled=false
 
     status:
       - kubectl wait deployment argocd-server --for=condition=available --timeout=60s -n argocd
   
-  clean-argoCD:
+  clean-argocd:
     cmds:
       - kubectl delete ns argocd
 
