@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: kubevela
+  namespace: argocd
+spec:
+  description: backend API deployment project
+  sourceRepos:
+    - https://github.com/adhatcher/kind-argocd-vela.git
+    - https://kubevela.github.io/charts/ 
+  destinations:
+    - namespace: argocd
+      server: https://kubernetes.default.svc
+    - namespace: vela-system
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

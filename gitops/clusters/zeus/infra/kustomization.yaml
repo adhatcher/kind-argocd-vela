@@ -1,4 +1,6 @@
 resources:
+  - kubevela-project.yaml
+  - project-observability.yaml
   - app-00-gateway-api-crds.yaml
   - app-10-envoy-gateway.yaml
   - app-30-edge.yaml
