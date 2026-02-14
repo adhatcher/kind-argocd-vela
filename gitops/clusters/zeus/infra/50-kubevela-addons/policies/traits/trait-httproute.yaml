@@ -1,0 +1,58 @@
+apiVersion: core.oam.dev/v1beta1
+kind: TraitDefinition
+metadata:
+  name: httproute
+  namespace: vela-system
+  annotations:
+    definition.oam.dev/description: Create an HTTPRoute for a component service.
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  appliesToWorkloads:
+    - deployments.apps
+    - statefulsets.apps
+  podDisruptive: false
+  schematic:
+    cue:
+      template: |
+        outputs: route: {
+          apiVersion: "gateway.networking.k8s.io/v1"
+          kind:       "HTTPRoute"
+          metadata: {
+            name:      parameter.routeName
+            namespace: context.namespace
+          }
+          spec: {
+            hostnames: [parameter.hostname]
+            parentRefs: [{
+              name:       parameter.gateway.name
+              namespace:  parameter.gateway.namespace
+              sectionName: parameter.gateway.sectionName
+            }]
+            rules: [{
+              matches: [{
+                path: {
+                  type:  "PathPrefix"
+                  value: parameter.path
+                }
+              }]
+              backendRefs: [{
+                name: parameter.service.name
+                port: parameter.service.port
+              }]
+            }]
+          }
+        }
+        parameter: {
+          routeName: *"\(context.name)-route" | string
+          hostname: string
+          path: *"/" | string
+          gateway: {
+            name: *"zeus-gw" | string
+            namespace: *"envoy-gateway-system" | string
+            sectionName: *"https" | string
+          }
+          service: {
+            name: *context.name | string
+            port: *8080 | int
+          }
+        }

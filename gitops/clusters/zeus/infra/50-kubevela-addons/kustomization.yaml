@@ -1,3 +1,5 @@
 resources:
   - velaux.yaml
   - fluxcd.yaml
+  - policies/traits/trait-httproute.yaml
+  - policies/traits/trait-health-probes.yaml

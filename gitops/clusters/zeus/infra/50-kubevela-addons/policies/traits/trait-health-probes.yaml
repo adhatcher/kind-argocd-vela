@@ -1,0 +1,46 @@
+apiVersion: core.oam.dev/v1beta1
+kind: TraitDefinition
+metadata:
+  name: health-probes
+  namespace: vela-system
+  annotations:
+    definition.oam.dev/description: Add liveness and readiness probes to a component container.
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  appliesToWorkloads:
+    - deployments.apps
+    - statefulsets.apps
+    - daemonsets.apps
+    - jobs.batch
+  podDisruptive: true
+  schematic:
+    cue:
+      template: |
+        patch: spec: template: spec: {
+          // +patchKey=name
+          containers: [{
+            name: _containerName
+            if parameter.livenessProbe != _|_ {
+              livenessProbe: parameter.livenessProbe
+            }
+            if parameter.readinessProbe != _|_ {
+              readinessProbe: parameter.readinessProbe
+            }
+          }]
+        }
+
+        _containerName: {
+          if parameter.containerName == "" {
+            context.name
+          }
+          if parameter.containerName != "" {
+            parameter.containerName
+          }
+        }
+
+        parameter: {
+          // Optional explicit container name; defaults to component name.
+          containerName: *"" | string
+          livenessProbe?: {...}
+          readinessProbe?: {...}
+        }
