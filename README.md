@@ -12,6 +12,11 @@ From `gitops/clusters/zeus/infra`, Argo CD applies resources in sync-wave order:
 4. `40` KubeVela core (`app-40-kubevela.yaml`)
 5. `50` KubeVela addons (VelaUX + FluxCD) (`app-50-kubevela-addons.yaml`)
 6. `60` VelaUX route (`app-60-kubevela-gateway.yaml`)
+7. `70` Prometheus Operator CRDs (`app-70-prometheus-operator-crds.yaml`)
+8. `71` Metrics Server (`app-71-metrics-server.yaml`)
+9. `72` kube-prometheus-stack (`app-72-kube-prometheus-stack.yaml`)
+10. `73` OpenTelemetry Operator (`app-73-opentelemetry-operator.yaml`)
+11. `74` Observability gateway routes (`app-74-observability-gateway.yaml`)
 
 ## Prerequisites
 
@@ -73,6 +78,8 @@ kubectl apply -f gitops/clusters/zeus/bootstrap/app-of-apps.yaml
 ```bash
 kubectl -n argocd wait deployment/argocd-server --for=condition=Available --timeout=300s
 kubectl -n vela-system wait deployment/vela-core --for=condition=Available --timeout=600s
+kubectl -n monitoring wait deployment/prometheus-grafana --for=condition=Available --timeout=600s
+kubectl -n observability wait deployment/opentelemetry-operator-controller-manager --for=condition=Available --timeout=600s
 ```
 
 5. Retrieve Argo CD admin password:

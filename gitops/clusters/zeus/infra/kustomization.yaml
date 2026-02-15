@@ -1,5 +1,5 @@
 resources:
-  - kubevela-project.yaml
+  - project-kubevela.yaml
   - project-observability.yaml
   - app-00-gateway-api-crds.yaml
   - app-10-envoy-gateway.yaml
@@ -7,9 +7,8 @@ resources:
   - app-40-kubevela.yaml
   - app-50-kubevela-addons.yaml
   - app-60-kubevela-gateway.yaml
-  - project-observability.yaml
   - app-70-prometheus-operator-crds.yaml
-  - app-70-metrics-server.yaml
-  - app-71-kube-prometheus-stack.yaml
-  - app-72-opentelemetry-operator.yaml
-  - app-73-observability-gateway.yaml
+  - app-71-metrics-server.yaml
+  - app-72-kube-prometheus-stack.yaml
+  - app-73-opentelemetry-operator.yaml
+  - app-74-observability-gateway.yaml

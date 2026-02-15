@@ -92,13 +92,15 @@ tasks:
       - kubectl apply -f {{.APP_OF_APPS}}
 
   wait-core:
-    desc: Wait for key platform components (Argo CD, Envoy Gateway, KubeVela)
+    desc: Wait for key platform components (Argo CD, Envoy Gateway, KubeVela, observability)
     deps:
       - deploy-app-of-apps
     cmds:
       - kubectl -n argocd wait deployment/argocd-server --for=condition=Available --timeout=300s
       - kubectl -n envoy-gateway-system wait deployment/envoy-gateway --for=condition=Available --timeout=300s
       - kubectl -n vela-system wait deployment/vela-core --for=condition=Available --timeout=600s
+      - kubectl -n monitoring wait deployment/prometheus-grafana --for=condition=Available --timeout=600s
+      - kubectl -n observability wait deployment/opentelemetry-operator-controller-manager --for=condition=Available --timeout=600s
 
   get-argocd-password:
     desc: Print Argo CD initial admin password
