@@ -4,11 +4,11 @@ version: '3'
 
 vars:
   CLUSTER_NAME: zeus
-  GATEWAY_NS: gateway
+  KIND_CONFIG: gitops/clusters/zeus/kind-config.yaml
+  APP_OF_APPS: gitops/clusters/zeus/bootstrap/app-of-apps.yaml
   DEPENDENCIES:
-    # - docker
+    - docker
     - kind
-    # - cloud-provider-kind
     - kubectl
     - helm
 
@@ -16,22 +16,22 @@ vars:
     docker info > /dev/null 2>&1
 
   check-cluster-running: &check-cluster-running |
-    kind get clusters | grep {{.CLUSTER_NAME}}
-
-  # check-cloud-provider-kind-running: &check-cloud-provider-kind-running |
-  #   ps -ef |grep cloud-provider-kind | grep -v grep
+    kind get clusters | grep -x {{.CLUSTER_NAME}}
 
 tasks:
-
   default:
     aliases: [deploy, all, make]
     deps:
-      #- check-dependencies
+      - bootstrap
+
+  bootstrap:
+    desc: Create Kind cluster, bootstrap Argo CD, and apply app-of-apps
+    deps:
       - create-cluster
       - deploy-argocd
-      - get-argocd-password
       - deploy-app-of-apps
-      
+      - wait-core
+      - get-argocd-password
 
   check-dependencies:
     silent: true
@@ -45,90 +45,76 @@ tasks:
 
   create-cluster:
     run: once
-    # preconditions:
-    #   - *check-docker-running
+    preconditions:
+      - *check-docker-running
     cmds:
-      - kind create cluster --config=gitops/clusters/zeus/kind-config.yaml --name {{.CLUSTER_NAME}}
+      - kind create cluster --config={{.KIND_CONFIG}} --name {{.CLUSTER_NAME}}
     status:
       - *check-cluster-running
 
   clean-cluster:
+    desc: Delete the Kind cluster
     cmds:
       - kind delete cluster --name {{.CLUSTER_NAME}}
 
   deploy-argocd:
-    desc: Installs Argocd via helm and sets argocd-cm url + server insecure
+    desc: Install Argo CD (bootstrap phase) with TLS terminated at Gateway
     run: once
     preconditions:
       - *check-cluster-running
     deps:
       - create-cluster
     cmds:
-      #- kubectl create ns argocd
-      - helm repo add argo https://argo.github.io/argo-helm
+      - helm repo add argo https://argoproj.github.io/argo-helm
       - helm repo update
       - |
         helm upgrade --install argocd argo/argo-cd \
           --namespace argocd \
           --create-namespace \
           --set server.insecure=true \
-          --set configs.cm.url=https://argocd.zeus \
           --set configs.params.server\\.insecure=true \
           --set server.ingress.enabled=false \
           --set server.service.type=ClusterIP \
           --set notifications.enabled=false \
           --set dex.enabled=false
+      - kubectl -n argocd wait deployment/argocd-server --for=condition=Available --timeout=300s
 
-    status:
-      - kubectl wait deployment argocd-server --for=condition=available --timeout=60s -n argocd
-  
   clean-argocd:
+    desc: Remove Argo CD namespace
     cmds:
-      - kubectl delete ns argocd
-
-  get-argocd-password:
-    desc: get argocd password
-    run: once
-    deps:
-      - deploy-argocd
-    preconditions:
-      -  kubectl wait deployment argocd-server --for=condition=available --timeout=60s -n argocd
-    cmds:
-      - kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode
-    status:
-      - kubectl wait deployment argocd-server --for=condition=available --timeout=60s -n argocd
-
+      - kubectl delete ns argocd --ignore-not-found=true
 
   deploy-app-of-apps:
-    desc: applies the app of apps in argocd
+    desc: Apply app-of-apps so Argo CD reconciles the Zeus infra stack
     deps:
       - deploy-argocd
     cmds:
-      - kubectl apply -f gitops/clusters/zeus/bootstrap/app-of-apps.yaml
+      - kubectl apply -f {{.APP_OF_APPS}}
+
+  wait-core:
+    desc: Wait for key platform components (Argo CD, Envoy Gateway, KubeVela)
+    deps:
+      - deploy-app-of-apps
+    cmds:
+      - kubectl -n argocd wait deployment/argocd-server --for=condition=Available --timeout=300s
+      - kubectl -n envoy-gateway-system wait deployment/envoy-gateway --for=condition=Available --timeout=300s
+      - kubectl -n vela-system wait deployment/vela-core --for=condition=Available --timeout=600s
+
+  get-argocd-password:
+    desc: Print Argo CD initial admin password
+    deps:
+      - deploy-argocd
+    cmds:
+      - kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode; echo
 
   render-kubevela-addons:
     desc: Render KubeVela addon manifests into gitops/clusters/zeus/infra/50-kubevela-addons
     cmds:
-      - |
-        vela addon enable velaux --dry-run > gitops/clusters/zeus/infra/50-kubevela-addons/velaux.yaml
-      - |
-        vela addon enable fluxcd --dry-run > gitops/clusters/zeus/infra/50-kubevela-addons/fluxcd.yaml
-    
+      - vela addon enable velaux --dry-run > gitops/clusters/zeus/infra/50-kubevela-addons/velaux.yaml
+      - vela addon enable fluxcd --dry-run > gitops/clusters/zeus/infra/50-kubevela-addons/fluxcd.yaml
 
-  create-certs:
-    desc: create the certs needed for envoy
-    deps:
-      - deploy-envoy
-    cmds:
-      - |
-        kubectl create secret tls zeus-wildcard-tls \
-          --cert=certs/zeus.crt \
-          --key=certs/zeus.key \
-          -n envoy-gateway-system \
-          --dry-run=client -o yaml > gitops/clusters/zeus/infra/30-edge/tls-secret.yaml
-          
   clean:
     aliases: [delete]
     deps:
+      - clean-argocd
       - clean-cluster
-      - clean-lb

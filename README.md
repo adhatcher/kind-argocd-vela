@@ -1,524 +1,102 @@
 # kind-argocd-vela
 
-## Order of operations
+This repo bootstraps a local Kind cluster (`zeus`) and then lets Argo CD manage the platform stack, including KubeVela and its addons.
 
-1. kind cluster “zeus”
-1. Gateway API + Envoy Gateway
-1. Argo CD
-1. KubeVela 1.10.6
-1. KubeVela addons: VelaUX + FluxCD
-1. Hostnames: argocd.zeus, vela.zeus (internal DNS, accessed from a remote machine)
-1. Self-signed TLS terminated at the Gateway
-1. Everything (Gateway + Routes + KubeVela + addons) under Argo GitOps, with explicit sync ordering
+## What the Zeus cluster deploys
 
-## Kind config (expose 80/443 + kubeapi 6334)
+From `gitops/clusters/zeus/infra`, Argo CD applies resources in sync-wave order:
 
-This makes the kubernetes api reacable remotely on :6334, and forwards host :80/:443 to fixed NodePorts for Envoy.
+1. `0`  Gateway API CRDs (`app-00-gateway-api-crds.yaml`)
+2. `10` Envoy Gateway + `GatewayClass` (`app-10-envoy-gateway.yaml`)
+3. `30` Edge Gateway + Argo CD route + TLS secret generation (`app-30-edge.yaml`)
+4. `40` KubeVela core (`app-40-kubevela.yaml`)
+5. `50` KubeVela addons (VelaUX + FluxCD) (`app-50-kubevela-addons.yaml`)
+6. `60` VelaUX route (`app-60-kubevela-gateway.yaml`)
 
-```yaml
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-name: zeus
+## Prerequisites
 
-networking:
-  apiServerAddress: "0.0.0.0"
-  apiServerPort: 6334
+- Docker
+- `kind`
+- `kubectl`
+- `helm`
+- Optional: `task` (Taskfile runner)
 
-nodes:
-  - role: control-plane
-    extraPortMappings:
-      - containerPort: 30080
-        hostPort: 80
-        protocol: TCP
-      - containerPort: 30443
-        hostPort: 443
-        protocol: TCP
-```
+## Required setup steps
 
-**Create the kind cluster using:**
+### Option A: Use Taskfile (recommended)
 
 ```bash
-kind create cluster --config kind-zeus.yaml
-kubectl cluster-info --context kind-zeus
+task bootstrap
 ```
 
-Firewall: allow inbound 80, 443, 6334 to the host (ideally 6334 allowlisted).
+`task bootstrap` runs the required flow in order:
 
-**Configure the following file layout:**
+1. `task create-cluster`
+2. `task deploy-argocd`
+3. `task deploy-app-of-apps`
+4. `task wait-core`
+5. `task get-argocd-password`
+
+### Option B: Run commands manually
+
+1. Create Kind cluster:
 
 ```bash
-gitops/
-  clusters/zeus/
-    bootstrap/
-      app-of-apps.yaml
-
-    infra/
-      00-gateway-api-crds/
-        kustomization.yaml
-        standard-install.yaml
-
-      10-envoy-gateway/
-        kustomization.yaml
-        envoyproxy-nodeports.yaml
-        gatewayclass.yaml
-
-      20-argocd/
-        kustomization.yaml
-        helm-values.yaml
-
-      30-edge/
-        kustomization.yaml
-        tls-secret.yaml
-        gateway.yaml
-        httproute-argocd.yaml
-        httproute-velaux.yaml
-
-      40-kubevela/
-        kustomization.yaml
-        helm-values.yaml
-
-      50-kubevela-addons/
-        kustomization.yaml
-        velaux.yaml
-        fluxcd.yaml
+kind create cluster --config=gitops/clusters/zeus/kind-config.yaml --name zeus
 ```
 
-**Notes:**
-
-1. The folder prefixes (00, 10, 20…) match Argo sync waves and make intent obvious.
-1. Gateway + Routes are in 30-edge and fully GitOps-managed.
-1. KubeVela addons are applied after core is installed.
-
-## 3. Bootstrap Argo CD once, then let it manage the rest
-
-### 3a. Install Argo CD once (imperative bootstrap)
-
-You can bootstrap Argo with Helm quickly (then everything else becomes GitOps).
+2. Install Argo CD (imperative bootstrap only):
 
 ```bash
-kubectl create ns argocd
-
 helm repo add argo https://argoproj.github.io/argo-helm
 helm repo update
 
-helm install argocd argo/argo-cd -n argocd \
-  --set configs.params."server\.insecure"=true
+helm upgrade --install argocd argo/argo-cd \
+  --namespace argocd \
+  --create-namespace \
+  --set server.insecure=true \
+  --set configs.params.server\\.insecure=true \
+  --set server.ingress.enabled=false \
+  --set server.service.type=ClusterIP \
+  --set notifications.enabled=false \
+  --set dex.enabled=false
 ```
 
-`server.insecure=true` is important because Gateway will terminate TLS; Argo CD will serve plain HTTP behind it.
-
-### 3b. Apply the “app-of-apps” manifest
-
-apply the `clusters/zeus/bootstrap/app-of-apps.yaml` file.
+3. Apply app-of-apps bootstrap:
 
 ```bash
 kubectl apply -f gitops/clusters/zeus/bootstrap/app-of-apps.yaml
 ```
 
-## 4. Argo sync ordering (the important part)
-
-Inside `gitops/clusters/zeus/infra`, you’ll have one Application per layer with sync-wave annotations.
-
-**Create this aggregator file:**
-
-`gitops/clusters/zeus/infra/kustomization.yaml`
-
-```yaml
-resources:
-  - app-00-gateway-api-crds.yaml
-  - app-10-envoy-gateway.yaml
-  - app-30-edge.yaml
-  - app-40-kubevela.yaml
-  - app-50-kubevela-addons.yaml
-```
-
-### 4a. Gateway API CRDs (wave 0)
-
-`gitops/clusters/zeus/infra/app-00-gateway-api-crds.yaml`
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: gateway-api-crds
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
-spec:
-  project: default
-  source:
-    repoURL: https://github.com/YOURORG/YOURREPO.git
-    targetRevision: main
-    path: gitops/clusters/zeus/infra/00-gateway-api-crds
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: kube-system
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-```
-
-`gitops/clusters/zeus/infra/00-gateway-api-crds/kustomization.yaml`
-
-```yaml
-resources:
-  - standard-install.yaml
-```
-
-Put the Gateway API standard install YAML in:
-`gitops/clusters/zeus/infra/00-gateway-api-crds/standard-install.yaml`
-
-(Download once and commit it so your cluster isn’t dependent on live URLs.)
-
-### 4b. Envoy Gateway (wave 10)
-
-`gitops/clusters/zeus/infra/app-10-envoy-gateway.yaml`
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: envoy-gateway
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "10"
-spec:
-  project: default
-
-  # Multiple sources: Helm chart + Git manifests
-  sources:
-    # 1) Envoy Gateway Helm chart
-    - chart: gateway-helm
-      repoURL: docker.io/envoyproxy
-      targetRevision: v1.6.3
-      helm:
-        # Keep defaults unless you need advanced config
-        valuesObject: {}
-
-    # 2) EnvoyProxy config (NodePort pinning)
-    - repoURL: https://github.com/adhatcher/kind-argocd-vela.git
-      targetRevision: main
-      path: gitops/clusters/zeus/infra/10-envoy-gateway
-
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: envoy-gateway-system
-
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
-      - ServerSideApply=true
-```
-
-`gitops/clusters/zeus/infra/10-envoy-gateway/kustomization.yaml`
-
-```yaml
-resources:
-  - envoyproxy-nodeports.yaml
-  - gatewayclass.yaml
-```
-
-`gitops/clusters/zeus/infra/10-envoy-gateway/envoyproxy-nodeports.yaml`
-
-```yaml
-apiVersion: gateway.envoyproxy.io/v1alpha1
-kind: EnvoyProxy
-metadata:
-  name: zeus-proxy
-  namespace: envoy-gateway-system
-spec:
-  provider:
-    type: Kubernetes
-    kubernetes:
-      envoyService:
-        type: NodePort
-        nodePort:
-          ports:
-          - port: 80
-            nodePort: 30080
-          - port: 443
-            nodePort: 30443
-```
-
-### 4c. Create a GatewayClass (and link it to your EnvoyProxy NodePort pinning)
-
-**Add this file:**
-
-`gitops/clusters/zeus/infra/10-envoy-gateway/gatewayclass.yaml`
-
-```YAML
-apiVersion: gateway.networking.k8s.io/v1
-kind: GatewayClass
-metadata:
-  name: envoy-gateway
-spec:
-  controllerName: gateway.envoyproxy.io/gatewayclass-controller
-  parametersRef:
-    group: gateway.envoyproxy.io
-    kind: EnvoyProxy
-    name: zeus-proxy
-    namespace: envoy-gateway-system
-```
-
-This is what makes host ports 80/443 forward into the Envoy dataplane consistently.
-
-## 5 Self-signed cert + Gateway + HTTPRoutes (wave 30, GitOps-managed)
-
-### 5a. Create a wildcard cert for *.zeus
-
-**Run this on your admin machine:**
+4. Wait for core components:
 
 ```bash
-mkdir -p certs
-openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
-  -keyout certs/zeus.key \
-  -out certs/zeus.crt \
-  -subj "/CN=*.zeus" \
-  -addext "subjectAltName=DNS:*.zeus,DNS:argocd.zeus,DNS:vela.zeus"
+kubectl -n argocd wait deployment/argocd-server --for=condition=Available --timeout=300s
+kubectl -n vela-system wait deployment/vela-core --for=condition=Available --timeout=600s
 ```
 
-### 5b. Create a Kubernetes TLS Secret manifest (commit to repo)
-
-**Generate base64:**
+5. Retrieve Argo CD admin password:
 
 ```bash
-CRT_B64=$(base64 < certs/zeus.crt | tr -d '\n')
-KEY_B64=$(base64 < certs/zeus.key | tr -d '\n')
-
-echo $CRT_B64 | head -c 60; echo
-echo $KEY_B64 | head -c 60; echo
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 --decode; echo
 ```
 
-**Put into:**
+## Access notes
 
-`gitops/clusters/zeus/infra/30-edge/tls-secret.yaml`
+- Kind maps host ports `80`/`443` to Envoy NodePorts in `gitops/clusters/zeus/kind-config.yaml`.
+- Gateway hostnames are configured for `*.zeus`.
+- Routes in this repo include:
+  - `argocd.zeus` (`gitops/clusters/zeus/infra/30-edge/httproute-argocd.yaml`)
+  - `vela.zeus` (`gitops/clusters/zeus/infra/60-kubevela-gateway/httproute-velaux.yaml`)
 
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: zeus-wildcard-tls
-  namespace: envoy-gateway-system
-type: kubernetes.io/tls
-data:
-  tls.crt: <PASTE_CRT_B64>
-  tls.key: <PASTE_KEY_B64>
-```
-
-Or use this instead:
+## Useful tasks
 
 ```bash
-kubectl create secret tls zeus-wildcard-tls \
-  --cert=certs/zeus.crt \
-  --key=certs/zeus.key \
-  -n envoy-gateway-system \
-  --dry-run=client -o yaml > gitops/clusters/zeus/infra/30-edge/tls-secret.yaml
-  ```
-
-  
-This is the simple GitOps path. If you’d rather not store private keys in git, the next step would be SOPS/age or SealedSecrets—say so and I’ll switch the plan.
-
-### 5c. Gateway + Routes
-
-`gitops/clusters/zeus/infra/app-30-edge.yaml`
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: edge
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "30"
-spec:
-  project: default
-  source:
-    repoURL: https://github.com/adhatcher/kind-argocd-vela.git
-    targetRevision: main
-    path: gitops/clusters/zeus/infra/30-edge
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: envoy-gateway-system
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+task check-dependencies
+task create-cluster
+task deploy-argocd
+task deploy-app-of-apps
+task wait-core
+task get-argocd-password
+task clean
 ```
-
-`gitops/clusters/zeus/infra/30-edge/kustomization.yaml`
-
-```yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-namespace: envoy-gateway-system
-
-resources:
-  - gateway.yaml
-  - httproute-argocd.yaml
-  - httproute-velaux.yaml
-
-secretGenerator:
-  - name: zeus-wildcard-tls
-    type: kubernetes.io/tls
-    files:
-      - tls.crt=../../../../../certs/zeus.crt
-      - tls.key=../../../../../certs/zeus.key
-
-generatorOptions:
-  disableNameSuffixHash: true
-```
-
-`gitops/clusters/zeus/infra/30-edge/gateway.yaml`
-
-```yaml
-apiVersion: gateway.networking.k8s.io/v1
-kind: Gateway
-metadata:
-  name: zeus-gw
-  namespace: envoy-gateway-system
-spec:
-  gatewayClassName: envoy-gateway
-  listeners:
-  - name: https
-    protocol: HTTPS
-    port: 443
-    hostname: "*.zeus"
-    tls:
-      mode: Terminate
-      certificateRefs:
-      - kind: Secret
-        name: zeus-wildcard-tls
-```
-
-**Route Argo CD:**
-
-`gitops/clusters/zeus/infra/30-edge/httproute-argocd.yaml`
-
-```yaml
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: argocd
-  namespace: argocd
-spec:
-  parentRefs:
-  - name: zeus-gw
-    namespace: envoy-gateway-system
-    sectionName: https
-  hostnames:
-  - argocd.zeus
-  rules:
-  - backendRefs:
-    - name: argocd-server
-      port: 80
-```
-
-**Route VelaUX (service name typically velaux, created by addon):**
-
-`gitops/clusters/zeus/infra/30-edge/httproute-velaux.yaml`
-
-```yaml
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: velaux
-  namespace: vela-system
-spec:
-  parentRefs:
-  - name: zeus-gw
-    namespace: envoy-gateway-system
-    sectionName: https
-  hostnames:
-  - vela.zeus
-  rules:
-  - backendRefs:
-    - name: velaux
-      port: 80
-```
-
-## 6 KubeVela core (wave 40) + addons (wave 50)
-
-### 6a. KubeVela core install (Helm via Argo)
-
-`gitops/clusters/zeus/infra/app-40-kubevela.yaml`
-
-```YAML
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: kubevela
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "40"
-spec:
-  project: default
-  source:
-    repoURL: https://charts.kubevela.net/core
-    chart: vela-core
-    targetRevision: 1.10.6
-    helm:
-      values: |
-        # defaults are fine for dev unless you need overrides
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: vela-system
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
-```
-
-### 6b. Enable addons declaratively (VelaUX + FluxCD) (wave 50)
-
-**Best GitOps pattern is:**
-
-1. Generate addon manifests using vela addon enable ... --dry-run
-1. Commit the output YAML into 50-kubevela-addons/
-
-`gitops/clusters/zeus/infra/app-50-kubevela-addons.yaml`
-
-```YAML
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: kubevela-addons
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "50"
-spec:
-  project: default
-  source:
-    repoURL: https://github.com/adhatcher/kind-argocd-vela.git
-    targetRevision: main
-    path: gitops/clusters/zeus/infra/50-kubevela-addons
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: vela-system
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-```
-
-`gitops/clusters/zeus/infra/50-kubevela-addons/kustomization.yaml`
-
-```YAML
-resources:
-  - velaux.yaml
-  - fluxcd.yaml
-```
-
-Now generate those two files (run after KubeVela core is installed once, or in a CI job that has vela):
-
-```bash
-vela addon enable velaux --dry-run > gitops/clusters/zeus/infra/50-kubevela-addons/velaux.yaml
-vela addon enable fluxcd --dry-run > gitops/clusters/zeus/infra/50-kubevela-addons/fluxcd.yaml
-```
-
-**Commit/push.**
