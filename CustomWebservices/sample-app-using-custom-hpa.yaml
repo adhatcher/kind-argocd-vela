@@ -1,0 +1,21 @@
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: demo
+spec:
+  components:
+    - name: frontend
+      type: golden-webservice
+      properties:
+        image: ghcr.io/acme/frontend:2026.02.14-1
+      traits:
+        - type: standard-topology
+        # To use an hpa that uses custom metrics, we need to disable the default hpa trait first, otherwise there will be a conflict between the two hpa traits.
+        - type: default-hpa
+          properties:
+            disable: true
+        - type: custom-hpa # custom defined hpa trait that uses custom metrics
+        - type: envoy-http-route
+          properties:
+            host: frontend.example.com
+            gatewayName: eg-gateway

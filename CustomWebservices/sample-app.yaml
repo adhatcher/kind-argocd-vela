@@ -1,0 +1,17 @@
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: demo
+spec:
+  components:
+    - name: frontend
+      type: golden-webservice
+      properties:
+        image: ghcr.io/acme/frontend:2026.02.14-1
+      traits:
+        - type: standard-topology
+        - type: default-hpa
+        - type: envoy-http-route
+          properties:
+            host: frontend.example.com
+            gatewayName: eg-gateway
