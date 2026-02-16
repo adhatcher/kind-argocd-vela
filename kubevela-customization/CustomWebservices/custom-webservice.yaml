@@ -1,5 +1,203 @@
-## What this component provides by default
+apiVersion: core.oam.dev/v1beta1
+kind: ComponentDefinition
+metadata:
+  name: golden-webservice
+  namespace: vela-system
+spec:
+  workload:
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+  schematic:
+    cue:
+      template: |
+        parameter: {
+          image: string
+          port: *8080 | int
 
-### Availability / Resiliency
-- **PodDisruptionBudget**
-  - `maxUnavailable: 1`
+          # Optional extra labels
+          labels: *{} | [string]: string
+
+          # Default probe path per your requirement
+          probePath: *"/healthz" | string
+
+          # Default resources (adjust to your org baseline)
+          resources: *{
+            requests: { cpu: "10m", memory: "80Mi" }
+            limits:   { memory: "128Mi" }
+          } | {...}
+
+          # Optional envFrom configmap convention
+          configMapName?: string
+          readOnlyRootFilesystem: *true | bool
+          topologyMaxSkew: *1 | int
+          hpa: {
+            enabled: *true | bool
+            minReplicas: *2 | int
+            maxReplicas: *10 | int
+            cpuUtilization: *70 | int
+            memoryUtilization: *70 | int
+          }
+        }
+
+        labels: {
+          "app.oam.dev/component": context.name
+        } & parameter.labels
+
+        output: {
+          apiVersion: "apps/v1"
+          kind: "Deployment"
+          metadata: {
+            name: context.name
+            labels: labels
+          }
+          spec: {
+            selector: matchLabels: labels
+            replicas: 2
+            strategy: {
+              type: "RollingUpdate"
+              rollingUpdate: {
+                maxUnavailable: 0
+                maxSurge: "25%"
+              }
+            }
+            template: {
+              metadata: labels: labels
+              spec: {
+                securityContext: {
+                  runAsNonRoot: true
+                  runAsUser: 10001
+                  runAsGroup: 10001
+                  seccompProfile: {
+                    type: "RuntimeDefault"
+                  }
+                }
+                topologySpreadConstraints: [
+                  {
+                    maxSkew: parameter.topologyMaxSkew
+                    topologyKey: "kubernetes.io/hostname"
+                    whenUnsatisfiable: "DoNotSchedule"
+                    labelSelector: {
+                      matchLabels: labels
+                    }
+                  },
+                  {
+                    maxSkew: parameter.topologyMaxSkew
+                    topologyKey: "topology.kubernetes.io/zone"
+                    whenUnsatisfiable: "DoNotSchedule"
+                    labelSelector: {
+                      matchLabels: labels
+                    }
+                  },
+                ]
+                containers: [{
+                  name: context.name
+                  image: parameter.image
+                  imagePullPolicy: "IfNotPresent"
+                  ports: [{ containerPort: parameter.port, name: "http" }]
+                  resources: parameter.resources
+                  securityContext: {
+                    allowPrivilegeEscalation: false
+                    readOnlyRootFilesystem: parameter.readOnlyRootFilesystem
+                    capabilities: {
+                      drop: ["ALL"]
+                    }
+                  }
+
+                  readinessProbe: {
+                    httpGet: { path: parameter.probePath, port: parameter.port }
+                    initialDelaySeconds: 5
+                    periodSeconds: 10
+                    failureThreshold: 3
+                  }
+
+                  livenessProbe: {
+                    httpGet: { path: parameter.probePath, port: parameter.port }
+                    initialDelaySeconds: 10
+                    periodSeconds: 10
+                    failureThreshold: 3
+                  }
+
+                  if parameter.configMapName != _|_ {
+                    envFrom: [{
+                      configMapRef: { name: parameter.configMapName }
+                    }]
+                  }
+                }]
+              }
+            }
+          }
+        }
+
+        outputs: service: {
+          apiVersion: "v1"
+          kind: "Service"
+          metadata: {
+            name: context.name
+            labels: labels
+          }
+          spec: {
+            selector: labels
+            ports: [{
+              name: "http"
+              port: parameter.port
+              targetPort: parameter.port
+            }]
+          }
+        }
+        outputs: pdb: {
+          apiVersion: "policy/v1"
+          kind: "PodDisruptionBudget"
+          metadata: {
+            name: "\(context.name)-pdb"
+            labels: labels
+          }
+          spec: {
+            maxUnavailable: 1
+            selector: {
+              matchLabels: labels
+            }
+          }
+        }
+        if parameter.hpa.enabled == true {
+          outputs: hpa: {
+            apiVersion: "autoscaling/v2"
+            kind: "HorizontalPodAutoscaler"
+            metadata: {
+              name: "\(context.name)-hpa"
+              namespace: context.namespace
+              labels: labels
+            }
+            spec: {
+              scaleTargetRef: {
+                apiVersion: "apps/v1"
+                kind: "Deployment"
+                name: context.name
+              }
+              minReplicas: parameter.hpa.minReplicas
+              maxReplicas: parameter.hpa.maxReplicas
+              metrics: [
+                {
+                  type: "Resource"
+                  resource: {
+                    name: "cpu"
+                    target: {
+                      type: "Utilization"
+                      averageUtilization: parameter.hpa.cpuUtilization
+                    }
+                  }
+                },
+                {
+                  type: "Resource"
+                  resource: {
+                    name: "memory"
+                    target: {
+                      type: "Utilization"
+                      averageUtilization: parameter.hpa.memoryUtilization
+                    }
+                  }
+                },
+              ]
+            }
+          }
+        }
