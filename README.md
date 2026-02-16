@@ -137,6 +137,140 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
   - `argocd.zeus` (`gitops/clusters/zeus/infra/30-edge/httproute-argocd.yaml`)
   - `vela.zeus` (`gitops/clusters/zeus/infra/60-kubevela-gateway/httproute-velaux.yaml`)
 
+## KubeVela custom-webservice definition
+
+Custom webservice artifacts live under `kubevela-customization/CustomWebservices`.
+
+### Features and default settings
+
+The custom definition provides a full deployment baseline:
+
+- Workload/resources created:
+  - `Deployment` + `Service`
+  - default `HorizontalPodAutoscaler`
+  - default topology spread constraints (node + zone)
+  - `PodDisruptionBudget` with `maxUnavailable: 1`
+- Container defaults:
+  - `port: 8080`
+  - `probePath: /healthz`
+  - readiness probe and liveness probe on the same path/port
+  - `resources.requests.cpu: 10m`
+  - `resources.requests.memory: 80Mi`
+  - `resources.limits.memory: 128Mi`
+- Scheduling defaults:
+  - spread across `kubernetes.io/hostname` (`maxSkew: 1`)
+  - spread across `topology.kubernetes.io/zone` (`maxSkew: 1`)
+  - both use `whenUnsatisfiable: DoNotSchedule`
+- Autoscaling defaults:
+  - `minReplicas: 2`
+  - `maxReplicas: 10`
+  - CPU target `70%`
+
+### Application requirements
+
+To use this custom definition and traits:
+
+- KubeVela must be installed and healthy in `vela-system`.
+- The custom component definition must be present in the cluster (`golden-webservice` or your equivalent `custom-webservice`).
+- Your container image must serve HTTP on the selected port (default `8080`).
+- If you keep the default probes, your app must expose `GET /healthz` (or you must override `probePath`).
+- If using default HPA behavior, Metrics Server must be installed.
+- If using `httproute`, Gateway API CRDs and a target `Gateway` listener must exist.
+
+### Optional parameters users can override
+
+Component properties:
+
+- `port`
+- `probePath`
+- `labels`
+- `resources`
+- `configMapName`
+
+Example override:
+
+```yaml
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: demo-overrides
+spec:
+  components:
+    - name: frontend
+      type: golden-webservice
+      properties:
+        image: ghcr.io/acme/frontend:2026.02.14-1
+        port: 9090
+        probePath: /ready
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            memory: 256Mi
+```
+
+### `httproute` custom trait
+
+Trait file: `gitops/clusters/zeus/infra/50-kubevela-addons/policies/traits/trait-httproute.yaml`
+
+Defaults:
+
+- `routeName: <component-name>-route`
+- `path: /`
+- `gateway.name: zeus-gw`
+- `gateway.namespace: envoy-gateway-system`
+- `gateway.sectionName: https`
+- `service.name: <component-name>`
+- `service.port: 8080`
+
+Required property:
+
+- `hostname`
+
+Optional overrides:
+
+- `routeName`
+- `path`
+- `gateway.name`
+- `gateway.namespace`
+- `gateway.sectionName`
+- `service.name`
+- `service.port`
+
+Trait example:
+
+```yaml
+traits:
+  - type: httproute
+    properties:
+      hostname: frontend.zeus
+      path: /api
+      service:
+        port: 9090
+```
+
+### Sample KubeVela application using custom-webservice pattern
+
+```yaml
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: demo-custom-webservice
+spec:
+  components:
+    - name: frontend
+      type: golden-webservice
+      properties:
+        image: ghcr.io/acme/frontend:2026.02.14-1
+      traits:
+        - type: httproute
+          properties:
+            hostname: frontend.zeus
+```
+
+For a focused guide and more examples, see `kubevela-customization/CustomWebservices/README.md`.
+
 ## Useful tasks
 
 ```bash

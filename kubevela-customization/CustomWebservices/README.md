@@ -1,319 +1,237 @@
-# Examples of how to customize Webservice experience in Kubevela
+# Custom Webservice Definition
 
-## Two clean ways to “pre-wire” a webservice experience in KubeVela:
+This document explains the features and usage of the KubeVela custom definition in `custom-webservice.yaml`, plus the custom `httproute` trait.
 
-1. Wrap/clone webservice into your own ComponentDefinition (best when you want defaults like probes, ports, resources baked in).
-2. Keep webservice as-is, but create opinionated TraitDefinitions (best when you want “just add trait X” with sane defaults).
+## Deployment characteristics provided by the custom definition
 
-In practice, most platforms do both: component defaults for “day-1”, traits for “day-2”.
+The custom webservice definition provides a full deployment baseline for web workloads.
 
-### 1. Create an opinionated web component type (defaults for probes, ports, resources)
+### Resource graph
 
-As a platform engineer, you define a new component type (example: standard-webservice) and set default parameters for readiness/liveness probes (and anything else you want standardized).
-KubeVela docs show how to build custom components via ComponentDefinition.
-Example ComponentDefinition (CUE template) with probe defaults (users can still override):
+```mermaid
+graph TD
+  APP["KubeVela Application"] --> COMP["Component: custom/golden webservice"]
 
-```YAML
-apiVersion: core.oam.dev/v1beta1
-kind: ComponentDefinition
-metadata:
-  name: standard-webservice
-  namespace: vela-system
-  annotations:
-    definition.oam.dev/description: "Opinionated webservice with default probes/resources"
-spec:
-  workload:
-    definition:
-      apiVersion: apps/v1
-      kind: Deployment
-  schematic:
-    cue:
-      template: |
-        parameter: {
-          image: string
-          port: *8080 | int
+  COMP --> DEP["Deployment <component-name>"]
+  COMP --> SVC["Service <component-name>"]
+  COMP --> HPA["HPA <component-name>-default"]
+  COMP --> PDB["PodDisruptionBudget (maxUnavailable: 1)"]
 
-          # Defaults; app teams can override
-          probes: {
-            readiness: *{
-              httpGet: { path: "/ready", port: parameter.port }
-              initialDelaySeconds: *5 | int
-              periodSeconds: *10 | int
-              failureThreshold: *3 | int
-            } | {...}
+  DEP --> POD["Pod template"]
+  POD --> PROBES["readiness/liveness probes"]
+  POD --> TOPO["topologySpreadConstraints: hostname + zone"]
 
-            liveness: *{
-              httpGet: { path: "/healthz", port: parameter.port }
-              initialDelaySeconds: *10 | int
-              periodSeconds: *10 | int
-              failureThreshold: *3 | int
-            } | {...}
-          }
+  SVC --> BACKEND["Backend for in-cluster traffic"]
+  HPA --> DEP
+  PDB --> DEP
 
-          resources: *{
-            requests: { cpu: "10m", memory: "80Mi" }
-            limits:   { memory: "128Mi" }
-          } | {...}
-        }
-
-        output: {
-          apiVersion: "apps/v1"
-          kind: "Deployment"
-          metadata: name: context.name
-          spec: {
-            selector: matchLabels: { "app.oam.dev/component": context.name }
-            template: {
-              metadata: labels: { "app.oam.dev/component": context.name }
-              spec: containers: [{
-                name: context.name
-                image: parameter.image
-                ports: [{ containerPort: parameter.port }]
-                resources: parameter.resources
-                readinessProbe: parameter.probes.readiness
-                livenessProbe:  parameter.probes.liveness
-              }]
-            }
-          }
-        }
-
-        # Optional: also generate a Service so http-route can target it
-        outputs: service: {
-          apiVersion: "v1"
-          kind: "Service"
-          metadata: name: context.name
-          spec: {
-            selector: { "app.oam.dev/component": context.name }
-            ports: [{
-              port: parameter.port
-              targetPort: parameter.port
-              name: "http"
-            }]
-          }
-        }
+  TRAIT["Trait: httproute (optional)"] --> ROUTE["HTTPRoute"]
+  ROUTE --> SVC
+  GW["Gateway listener"] --> ROUTE
 ```
 
+### Workload and service shape
 
-### 2. Attach “standard” traits for topology spread, HTTPRoute, and HPA
+- Creates a `Deployment` named after the component (`context.name`)
+- Creates a `Service` named after the component (`context.name`)
+- Uses component label `app.oam.dev/component: <component-name>` for selectors and matching
+- Exposes one named HTTP port (`http`) mapped to the component `port` value
 
-#### Topology spread constraints
+### Container runtime defaults
 
-KubeVela has a built-in topologyspreadconstraints trait type (it patches workload pod templates under spec.template). [Docs](https://kubevela.io/docs/end-user/traits/references/?utm_source=chatgpt.com)
+- Required image input:
+  - `image`
+- Default container port:
+  - `port: 8080`
+- Default health probes:
+  - readiness probe HTTP GET on `probePath` (default `/healthz`) and `port`
+  - liveness probe HTTP GET on `probePath` (default `/healthz`) and `port`
+  - readiness timings: `initialDelaySeconds: 5`, `periodSeconds: 10`, `failureThreshold: 3`
+  - liveness timings: `initialDelaySeconds: 10`, `periodSeconds: 10`, `failureThreshold: 3`
+- Default resources:
+  - `requests.cpu: 10m`
+  - `requests.memory: 80Mi`
+  - `limits.memory: 128Mi`
+- Optional `envFrom`:
+  - from `configMapName` if supplied
 
-##### HTTPRoute
+### Scheduling and resiliency defaults
 
-KubeVela supports http-route as a trait (commonly provided by an addon like Traefik/Gateway). The docs show http-route trait usage with domains, rules, gatewayName, listenerName. [Docs](https://kubevela.io/docs/tutorials/access-application/?utm_source=chatgpt.com)
-(Heads-up: this trait may not exist until the relevant addon/capability is installed—people hit “trait definition … not found” when it’s missing.[Docs](https://github.com/kubevela/kubevela/issues/7013?utm_source=chatgpt.com) )
+- Topology spread constraints:
+  - `kubernetes.io/hostname` with `maxSkew: 1`, `whenUnsatisfiable: DoNotSchedule`
+  - `topology.kubernetes.io/zone` with `maxSkew: 1`, `whenUnsatisfiable: DoNotSchedule`
+- Autoscaling behavior:
+  - default HPA target: deployment `<component-name>`
+  - `minReplicas: 2`
+  - `maxReplicas: 10`
+  - CPU utilization target: `70%`
+  - deterministic HPA name: `<component-name>-default`
+  - HPA can be disabled for custom autoscaling policies
+- Pod disruption policy:
+  - PodDisruptionBudget with `maxUnavailable: 1`
 
-##### HPA
+### Required application properties
 
-There is a built-in hpa TraitDefinition example in the KubeVela definition protocol docs.[Docs](https://kubevela.io/docs/platform-engineers/oam/x-definition/?utm_source=chatgpt.com)
-Also: if you use HPA (or KEDA), you typically want an “apply-once” style policy so the controller owns replicas after the first apply (KubeVela docs call this out for autoscaling). [Docs](https://kubevela.io/docs/tutorials/auto-scaler/?utm_source=chatgpt.com)
+At minimum, an app using this custom webservice definition should provide:
 
-### Putting it together: an Application that “just works” with your defaults + traits
+- `image` (required)
 
-```YAML
+### Optional properties that users can override
+
+- `port`
+- `probePath`
+- `labels`
+- `resources`
+- `configMapName`
+
+Autoscaling/topology/PDB tunables should be overridden using the fields exposed by your merged `custom-webservice` schema.
+
+## Application requirements
+
+To use this custom definition successfully, the cluster/app environment must meet these requirements:
+
+- KubeVela is installed and running (`vela-system` namespace).
+- The custom component definition is installed in the cluster (for example `golden-webservice` / your `custom-webservice` definition).
+- If you keep default probes, your app container must expose HTTP on `port` (default `8080`) and serve `GET /healthz` (or override `probePath`).
+- If using `httproute` trait, Gateway API CRDs must be installed.
+- If using `httproute` trait, a target `Gateway` and listener section must exist and allow your host/path.
+- If using autoscaling traits (like `default-hpa`), Metrics Server must be installed.
+
+## Override examples
+
+### Minimal (only required field)
+
+```yaml
 apiVersion: core.oam.dev/v1beta1
 kind: Application
 metadata:
-  name: demo
-spec:
-  components:
-    - name: frontend
-      type: standard-webservice
-      properties:
-        image: ghcr.io/acme/frontend:2026.02.14-1
-        # port/probes/resources can be omitted (defaults) or overridden
-
-      traits:
-        - type: topologyspreadconstraints
-          properties:
-            constraints:
-              - maxSkew: 1
-                topologyKey: kubernetes.io/hostname
-                whenUnsatisfiable: DoNotSchedule
-                labelSelector:
-                  matchLabels:
-                    app.oam.dev/component: frontend
-
-        - type: http-route
-          properties:
-            domains: ["frontend.example.com"]
-            gatewayName: traefik-gateway
-            listenerName: web
-            rules:
-              - port: 8080
-                path: /
-
-        - type: hpa
-          properties:
-            min: 2
-            max: 10
-            cpuPercent: 70
-
-  # Optional but recommended with autoscaling so replicas aren't constantly reconciled by the app
-  policies:
-    - name: apply-once
-      type: apply-once
-```
-
-If you want “no-config traits” (predefined defaults when users don’t set properties)
-
-Do this by creating your own TraitDefinitions (wrappers) like:
-standard-topologyspread (no properties; always applies your org constraints)
-standard-public-route (maybe only needs domain, everything else defaulted)
-standard-hpa (defaults min/max/metrics)
-TraitDefinition customization is explicitly supported (traits can also patch generated workload/service output).
-
-If you tell me which gateway controller/addon you’re using for HTTPRoute (Traefik? Envoy Gateway? something else) and what “standard” probe paths/thresholds you want, I’ll tailor the exact TraitDefinition CUE for standard-public-route and standard-hpa so app teams can literally add - type: standard-hpa with zero properties.
-
-## If your goal is “app teams write the fewest possible lines,” the winning pattern in KubeVela is
-
-- **One opinionated component type** (your “golden webservice”) with as many defaults as you can safely bake in (ports, probes, resources, envFrom, service creation, etc.)
-- **A small set of “opinionated wrapper traits”** that apply defaults automatically (topology spread, http exposure, autoscaling)
-- Optionally, **a workflow step** or policy that auto-attaches those traits so teams don’t even list them
-
-### Make a “golden webservice” component type
-
-Instead of using the stock `webservice`, create `webservice.default` (or similar) as a `ComponentDefinition` that renders:
-
-- Deployment
-- Service
-- default readiness/liveness probes
-- default resources
-- default labels/selectors
-- default configMap envFrom (if you always use it)
-
-Then apps only specify `image` (and maybe domain).
-
-Why: probes are not “optional add-ons” for most orgs—they’re baseline hygiene. Component defaults are the cleanest place to enforce them.
-
-**Key trick**: allow overrides, but provide strong defaults via *{...} | {...} patterns in CUE.
-
-### 2. Create “no-config” wrapper traits for everything else
-
-Even if KubeVela already has traits like `hpa`, `topologyspreadconstraints`, `http-route`, you can wrap them with your own traits that have:
-
-- zero required fields
-- your default settings embedded
-- maybe one optional field (like domain)
-
-#### Examples:
-
-`standard-topology`
-
-A trait that patches the workload pod template with your org’s topology spread constraints. No user properties at all.
-
-`standard-expose`
-
-A trait that generates the HTTPRoute with your default:
-
-- gatewayName
-- listenerName
-- path /
-- service port
-
-    Only property: domain (optional; could default to <component>.<namespace>.yourdns if you want).
-
-`standard-hpa`
-
-A trait that creates HPA with your default:
-
-- min/max
-- cpu threshold
-
-    Optionally allow overrides.
-
-`Why wrapper traits matter`: you don’t want app teams copying the same 25 lines of `topologySpreadConstraints` everywhere.
-
-### 3. Auto-attach traits so teams don’t list them
-
-If you want *really* minimal app YAML, make “standardization” happen automatically. Two common ways:
-
-#### Option A: A “standardize” workflow step
-
-Create a workflow step that:
-
-- takes a component
-- attaches your standard traits (standard-topology, standard-expose, standard-hpa)
-- applies everything
-
-Then apps can be as short as:
-
-```YAML
-apiVersion: core.oam.dev/v1beta1
-kind: Application
-metadata:
-  name: demo
+  name: demo-minimal
 spec:
   components:
     - name: frontend
       type: golden-webservice
       properties:
         image: ghcr.io/acme/frontend:2026.02.14-1
-        domain: frontend.example.com
-  workflow:
-    steps:
-      - name: deploy
-        type: standardize-and-apply
 ```
 
-### Option B: Enforce defaults with policies
+### Override port, probe path, and resources
 
-Policies are good for deployment behavior (apply-once, placement, override), but for “attach these traits,” workflow steps are usually more flexible.
-
-### 4. Concrete “minimal lines” blueprint
-
-**What app teams write**
-
-Target: 10–15 lines total for a typical web app.
-
-They provide:
-
-- image
-- domain (optional)
-- maybe one scaling “profile” (small/medium/large)
-
-**What the platform provides**
-
-- `golden-webservice` component (includes probes/resources/service/envFrom)
-- `standardize-and-apply` workflow step (attaches traits automatically)
-- traits:
-  - `standard-topology`
-  - `standard-expose` (HTTPRoute defaults)
-  - `standard-hpa`
-- a default `apply-once` policy when autoscaling is enabled
-
-### 5 Practical advice on what to bake where
-
-**Bake into component defaults (almost always):**
-
-- probes
-- ports
-- Service creation + naming
-- resources baseline
-- labels/selectors
-- envFrom configMap naming convention (if you have one)
-
-Keep as traits (because they’re environment-dependent or optional):
-
-- topology spread constraints (sometimes varies by cluster)
-- HTTPRoute/gateway attachment (varies by gateway controller and gateway n-]ame)
-- HPA (not every workload wants it, and metrics differ)
-
-Auto-attach via workflow step:
-
-- topology + expose + HPA for “standard web apps”
-skip expose if domain is empty (internal-only apps)
-
-### 6. A very opinionated “profiles” trick (huge YAML reduction)
-
-Instead of exposing every knob, expose a single parameter like:
-
-```YAML
-properties:
-  image: ...
-  profile: small
+```yaml
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: demo-overrides
+spec:
+  components:
+    - name: frontend
+      type: golden-webservice
+      properties:
+        image: ghcr.io/acme/frontend:2026.02.14-1
+        port: 9090
+        probePath: /ready
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            memory: 256Mi
 ```
 
-And in the component/traits you map profile → resources/probes/hpa defaults.
-This is how you get maximum defaults without forcing app teams into giant YAMLs.
+### Override with additional labels and config map
+
+```yaml
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: demo-config
+spec:
+  components:
+    - name: frontend
+      type: golden-webservice
+      properties:
+        image: ghcr.io/acme/frontend:2026.02.14-1
+        labels:
+          team: platform
+          tier: web
+        configMapName: frontend-config
+```
+
+## `httproute` custom trait
+
+This repo includes a custom trait definition at `gitops/clusters/zeus/infra/50-kubevela-addons/policies/traits/trait-httproute.yaml`.
+
+### Trait defaults
+
+- `routeName`: `<component-name>-route`
+- `path`: `/`
+- `gateway.name`: `zeus-gw`
+- `gateway.namespace`: `envoy-gateway-system`
+- `gateway.sectionName`: `https`
+- `service.name`: `<component-name>`
+- `service.port`: `8080`
+
+### Required trait property
+
+- `hostname`
+
+### Optional trait overrides
+
+- `routeName`
+- `path`
+- `gateway.name`
+- `gateway.namespace`
+- `gateway.sectionName`
+- `service.name`
+- `service.port`
+
+### Trait usage example (default gateway, custom hostname)
+
+```yaml
+traits:
+  - type: httproute
+    properties:
+      hostname: frontend.zeus
+```
+
+### Trait usage example (override gateway/path/service)
+
+```yaml
+traits:
+  - type: httproute
+    properties:
+      routeName: frontend-public
+      hostname: app.example.com
+      path: /api
+      gateway:
+        name: public-gateway
+        namespace: envoy-gateway-system
+        sectionName: https
+      service:
+        name: frontend
+        port: 9090
+```
+
+## Complete sample app using the custom webservice + `httproute`
+
+```yaml
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: demo-custom-webservice
+spec:
+  components:
+    - name: frontend
+      type: golden-webservice
+      properties:
+        image: ghcr.io/acme/frontend:2026.02.14-1
+        port: 8080
+      traits:
+        - type: httproute
+          properties:
+            hostname: frontend.zeus
+```
+
+## Notes
+
+- The sample component type name above is `golden-webservice`, because that is the current custom webservice definition used in this repo's KubeVela customization docs.
+- If your installed component definition name is `custom-webservice`, replace `type: golden-webservice` with `type: custom-webservice` in examples.
