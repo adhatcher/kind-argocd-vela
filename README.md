@@ -41,8 +41,57 @@ graph TD
   W72 --> R72["kube-prometheus-stack"]
   W73 --> R73["OpenTelemetry Operator"]
   W74 --> R74["HTTPRoutes: Grafana + Prometheus"]
-
 ```
+
+```mermaid
+mermaid
+flowchart TD
+  A["Kind cluster: zeus<br/>gitops/clusters/zeus/kind-config.yaml"] --> B["Bootstrap apply<br/>bootstrap/app-of-apps.yaml"]
+  B --> C["Argo CD Application<br/>zeus-infra"]
+  C --> D["infra/kustomization.yaml"]
+
+  D --> PK["AppProject kubevela<br/>project-kubevela.yaml"]
+  D --> PO["AppProject observability<br/>project-observability.yaml"]
+
+  D --> W00["Wave 00<br/>app-00-gateway-api-crds.yaml"]
+  W00 --> R00["Gateway API CRDs<br/>00-gateway-api-crds/standard-install.yaml"]
+
+  D --> W10["Wave 10<br/>app-10-envoy-gateway.yaml"]
+  W10 --> R10A["Envoy Gateway Helm chart"]
+  W10 --> R10B["EnvoyProxy and GatewayClass<br/>10-envoy-gateway/*"]
+
+  D --> W30["Wave 30<br/>app-30-edge.yaml"]
+  W30 --> R30A["Gateway zeus-gw<br/>30-edge/gateway.yaml"]
+  W30 --> R30B["HTTPRoute argocd.zeus<br/>30-edge/httproute-argocd.yaml"]
+  W30 --> R30C["TLS Secret zeus-wildcard-tls<br/>30-edge secretGenerator from certs/"]
+
+  D --> W40["Wave 40<br/>app-40-kubevela.yaml"]
+  W40 --> R40["KubeVela core: vela-core Helm<br/>namespace: vela-system"]
+
+  D --> W50["Wave 50<br/>app-50-kubevela-addons.yaml"]
+  W50 --> R50A["VelaUX addon manifest"]
+  W50 --> R50B["FluxCD addon manifest"]
+  W50 --> R50C["KubeVela trait definitions"]
+
+  D --> W60["Wave 60<br/>app-60-kubevela-gateway.yaml"]
+  W60 --> R60["HTTPRoute vela.zeus to velaux-server<br/>60-kubevela-gateway/httproute-velaux.yaml"]
+
+  D --> W70["Wave 70<br/>app-70-prometheus-operator-crds.yaml"]
+  W70 --> R70["Prometheus Operator CRDs"]
+
+  D --> W71["Wave 71<br/>app-71-metrics-server.yaml"]
+  W71 --> R71["metrics-server Helm release"]
+
+  D --> W72["Wave 72<br/>app-72-kube-prometheus-stack.yaml"]
+  W72 --> R72["kube-prometheus-stack Helm release<br/>Grafana, Prometheus, Alertmanager"]
+
+  D --> W73["Wave 73<br/>app-73-opentelemetry-operator.yaml"]
+  W73 --> R73["OpenTelemetry Operator Helm release"]
+
+  D --> W74["Wave 74<br/>app-74-observability-gateway.yaml"]
+  W74 --> R74["HTTPRoutes for Grafana and Prometheus<br/>70-observability-gateway/*"]
+```
+
 
 ## What the Zeus cluster deploys
 
