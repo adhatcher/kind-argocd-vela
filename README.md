@@ -44,7 +44,6 @@ graph TD
 ```
 
 ```mermaid
-mermaid
 flowchart TD
   A["Kind cluster: zeus<br/>gitops/clusters/zeus/kind-config.yaml"] --> B["Bootstrap apply<br/>bootstrap/app-of-apps.yaml"]
   B --> C["Argo CD Application<br/>zeus-infra"]
@@ -91,7 +90,6 @@ flowchart TD
   D --> W74["Wave 74<br/>app-74-observability-gateway.yaml"]
   W74 --> R74["HTTPRoutes for Grafana and Prometheus<br/>70-observability-gateway/*"]
 ```
-
 
 ## What the Zeus cluster deploys
 
