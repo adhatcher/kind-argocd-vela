@@ -15,19 +15,19 @@ spec:
           image: string
           port: *8080 | int
 
-          # Optional extra labels
+          // Optional extra labels
           labels: *{} | [string]: string
 
-          # Default probe path per your requirement
+          // Default probe path per your requirement
           probePath: *"/healthz" | string
 
-          # Default resources (adjust to your org baseline)
+          // Default resources (adjust to your org baseline)
           resources: *{
             requests: { cpu: "10m", memory: "80Mi" }
             limits:   { memory: "128Mi" }
           } | {...}
 
-          # Optional envFrom configmap convention
+          // Optional envFrom configmap convention
           configMapName?: string
           readOnlyRootFilesystem: *true | bool
           topologyMaxSkew: *1 | int
