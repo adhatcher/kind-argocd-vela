@@ -1,5 +1,7 @@
 resources:
   - velaux.yaml
   - fluxcd.yaml
+  - custom-webservice.yaml
   - policies/traits/trait-httproute.yaml
   - policies/traits/trait-health-probes.yaml
+  - policies/traits/custom-httproute.yaml

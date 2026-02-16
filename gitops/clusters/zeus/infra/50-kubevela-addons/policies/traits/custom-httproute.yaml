@@ -13,7 +13,7 @@ spec:
           gatewayNamespace: *"envoy-gateway-system" | string
           listenerSectionName: *"http" | string
 
-          # defaults
+          // defaults
           pathPrefix: *"/" | string
           port: *8080 | int
         }
@@ -24,6 +24,10 @@ spec:
           metadata: {
             name: context.name
             namespace: context.namespace
+            labels: {
+              "app.oam.dev/component": context.name
+              "app.oam.dev/trait": "envoy-http-route"
+            }
           }
           spec: {
             parentRefs: [{

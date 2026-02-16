@@ -20,6 +20,10 @@ spec:
           metadata: {
             name:      parameter.routeName
             namespace: context.namespace
+            labels: {
+              "app.oam.dev/component": context.name
+              "app.oam.dev/trait":     "httproute"
+            }
           }
           spec: {
             hostnames: [parameter.hostname]
