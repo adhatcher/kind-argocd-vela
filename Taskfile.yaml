@@ -32,6 +32,7 @@ tasks:
       - deploy-app-of-apps
       - wait-core
       - get-argocd-password
+      - deploy-custom-webservice
 
   check-dependencies:
     silent: true
@@ -114,6 +115,11 @@ tasks:
     cmds:
       - vela addon enable velaux --dry-run > gitops/clusters/zeus/infra/50-kubevela-addons/velaux.yaml
       - vela addon enable fluxcd --dry-run > gitops/clusters/zeus/infra/50-kubevela-addons/fluxcd.yaml
+  
+  deploy-custom-webservice:
+    desc: Deploy a sample custom webservice component to demonstrate KubeVela extensibility
+    cmds:
+      - kubectl -n vela-system apply -k kubevela-customization/CustomWebservices
 
   clean:
     aliases: [delete]
