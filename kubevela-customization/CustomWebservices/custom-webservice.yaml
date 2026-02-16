@@ -16,7 +16,9 @@ spec:
           port: *8080 | int
 
           // Optional extra labels
-          labels: *{} | [string]: string
+          labels: *{} | {
+            [string]: string
+          }
 
           // Default probe path per your requirement
           probePath: *"/healthz" | string
