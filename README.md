@@ -2,6 +2,48 @@
 
 This repo bootstraps a local Kind cluster (`zeus`) and then lets Argo CD manage the platform stack, including KubeVela and its addons.
 
+## Architecture Diagram
+
+```mermaid
+graph TD
+  A["Kind cluster: zeus"] --> B["Apply bootstrap/app-of-apps.yaml"]
+  B --> C["Argo CD app: zeus-infra"]
+  C --> D["infra/kustomization.yaml"]
+
+  D --> PK["AppProject: kubevela"]
+  D --> PO["AppProject: observability"]
+
+  D --> W00["Wave 00: gateway-api-crds"]
+  D --> W10["Wave 10: envoy-gateway"]
+  D --> W30["Wave 30: edge"]
+  D --> W40["Wave 40: kubevela"]
+  D --> W50["Wave 50: kubevela-addons"]
+  D --> W60["Wave 60: kubevela-gateway"]
+  D --> W70["Wave 70: prometheus-operator-crds"]
+  D --> W71["Wave 71: metrics-server"]
+  D --> W72["Wave 72: kube-prometheus-stack"]
+  D --> W73["Wave 73: opentelemetry-operator"]
+  D --> W74["Wave 74: observability-gateway"]
+
+  W00 --> R00["Gateway API CRDs"]
+  W10 --> R10A["Envoy Gateway chart"]
+  W10 --> R10B["EnvoyProxy + GatewayClass"]
+  W30 --> R30A["Gateway zeus-gw"]
+  W30 --> R30B["HTTPRoute argocd.zeus"]
+  W30 --> R30C["TLS secret zeus-wildcard-tls"]
+  W40 --> R40["KubeVela core"]
+  W50 --> R50A["VelaUX addon"]
+  W50 --> R50B["FluxCD addon"]
+  W50 --> R50C["KubeVela trait definitions"]
+  W60 --> R60["HTTPRoute vela.zeus"]
+  W70 --> R70["Prometheus Operator CRDs"]
+  W71 --> R71["metrics-server"]
+  W72 --> R72["kube-prometheus-stack"]
+  W73 --> R73["OpenTelemetry Operator"]
+  W74 --> R74["HTTPRoutes: Grafana + Prometheus"]
+
+```
+
 ## What the Zeus cluster deploys
 
 From `gitops/clusters/zeus/infra`, Argo CD applies resources in sync-wave order:
