@@ -5,43 +5,41 @@ This setup reduces the amount of **app YAML down to basically image + host**, wh
 ```mermaid
 
 flowchart TB
-  subgraph NS["Namespace: <app-namespace>"]
-    direction TB
+    subgraph NS["Namespace: <app-namespace>"]
+      direction TB
 
-    APP["OAM Application demo"] --> COMP["Component golden-webservice frontend"]
+      APP["OAM Application demo"] --> COMP["Component golden-webservice frontend"]
 
-    COMP --> DEP["Deployment frontend"]
-    COMP --> SVC["Service frontend"]
+      COMP --> DEP["Deployment frontend"]
+      COMP --> SVC["Service frontend"]
 
-    COMP --> TOPO["Trait standard-topology"]
-    TOPO --> DEP
+      COMP --> TOPO["Trait standard-topology"]
+      TOPO --> DEP
 
-    COMP --> HPA_T["Trait default-hpa"]
-    HPA_T --> HPA["HorizontalPodAutoscaler frontend-default"]
+      COMP --> HPA_T["Trait default-hpa"]
+      HPA_T --> HPA["HorizontalPodAutoscaler frontend-default"]
 
-    COMP --> ROUTE_T["Trait envoy-http-route"]
-    ROUTE_T --> HR["HTTPRoute frontend"]
+      COMP --> ROUTE_T["Trait envoy-http-route"]
+      ROUTE_T --> HR["HTTPRoute frontend"]
 
-    DEP --> RS["ReplicaSet"]
-    RS --> PODS["Pods"]
-  end
+      DEP --> RS["ReplicaSet"]
+      RS --> PODS["Pods"]
+    end
 
-  subgraph GWNS["Namespace: envoy-gateway-system"]
-    direction TB
-    GW["Gateway eg-gateway"]
-  end
+    subgraph GWNS["Namespace: envoy-gateway-system"]
+      direction TB
+      GW["Gateway eg-gateway"]
+    end
 
-  GW --> HR
-  HR -->|"backendRefs"| SVC
-  SVC -->|"selector: app.oam.dev/component=frontend"| PODS
+    GW --> HR
+    HR -->|"backendRefs"| SVC
+    SVC -->|"selector: app.oam.dev/component=frontend"| PODS
 
-  PODS -.->|"PodSpec patch"| TSC["topologySpreadConstraints - kubernetes.io/hostname (maxSkew=1) - topology.kubernetes.io/zone (maxSkew=1)"]
-  PODS -.->|"Container probes"| PROBES["readinessProbe: GET /healthz livenessProbe: GET /healthz"]
+    PODS -.->|"PodSpec patch"| TSC["topologySpreadConstraints - kubernetes.io/hostname (maxSkew=1) - topology.kubernetes.io/zone (maxSkew=1)"]
+    PODS -.->|"Container probes"| PROBES["readinessProbe: GET /healthz livenessProbe: GET /healthz"]
 
-  HPA -->|"scaleTargetRef"| DEP
+    HPA -->|"scaleTargetRef"| DEP
 ```
-
-![Custom WebService](./images/custom-webservice.svg)
 
 ## Define the following
 

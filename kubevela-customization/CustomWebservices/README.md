@@ -8,6 +8,7 @@
 In practice, most platforms do both: component defaults for “day-1”, traits for “day-2”.
 
 ### 1. Create an opinionated web component type (defaults for probes, ports, resources)
+
 As a platform engineer, you define a new component type (example: standard-webservice) and set default parameters for readiness/liveness probes (and anything else you want standardized).
 KubeVela docs show how to build custom components via ComponentDefinition.
 Example ComponentDefinition (CUE template) with probe defaults (users can still override):
